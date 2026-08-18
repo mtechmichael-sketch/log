@@ -7,6 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#12161c">
+<meta name="app-version" content="1.3.0">
 <title>MTech-Loggen</title>
 <style>
 :root{
@@ -117,6 +118,10 @@ tr:last-child td{border-bottom:0}
 svg{display:block;width:100%;height:auto}
 hr{border:0;border-top:1px solid var(--line);margin:12px 0}
 .mini{font-size:11px;color:var(--mut)}
+#updBar{display:flex;align-items:center;gap:10px;background:var(--acc2);color:#fff;
+  padding:10px 14px;font-size:13px;font-weight:600;position:sticky;top:0;z-index:25}
+#updBar button{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.5);
+  color:#fff;padding:6px 12px;font-size:12px;border-radius:7px;margin-left:auto}
 details summary{cursor:pointer;font-size:13px;color:var(--mut);padding:6px 0}
 details[open] summary{color:var(--ink);margin-bottom:6px}
 </style>
@@ -135,6 +140,11 @@ details[open] summary{color:var(--ink);margin-bottom:6px}
     </div>
   </div>
 </header>
+
+<div id="updBar" class="hide">
+  <span>Ny version <b id="updVer">—</b> er klar</span>
+  <button onclick="doUpdate()">Hent nu</button>
+</div>
 
 <main>
 
@@ -214,16 +224,26 @@ details[open] summary{color:var(--ink);margin-bottom:6px}
   </div>
 
   <div class="card">
-    <h2>Hurtigknapper</h2>
+    <h2>Retter</h2>
+    <div class="grid g2" id="dishWrap"></div>
+    <div class="note" style="margin-top:8px">Ét tryk = én portion. Spiser du to, trykker du to gange.</div>
+  </div>
+
+  <div class="card">
+    <h2 class="g">Råvarer</h2>
     <div class="grid g3" id="quickWrap"></div>
     <details style="margin-top:10px">
-      <summary>+ Tilføj egen fødevare</summary>
+      <summary>+ Tilføj egen ret eller råvare</summary>
       <div class="grid g2" style="margin-top:6px">
         <input id="nfName" placeholder="Navn" style="grid-column:1/-1">
-        <input id="nfPortion" placeholder="Portion (fx 100 g)">
+        <select id="nfCat">
+          <option value="ret">Ret (hel portion)</option>
+          <option value="vare">Råvare</option>
+        </select>
+        <input id="nfPortion" placeholder="Portion (fx 1 portion)">
         <input id="nfKcal" type="number" inputmode="decimal" placeholder="kcal">
         <input id="nfProt" type="number" inputmode="decimal" placeholder="protein (g)">
-        <button class="btn-sm" onclick="addCustomFood()">Gem vare</button>
+        <button class="btn-sm" style="grid-column:1/-1" onclick="addCustomFood()">Gem</button>
       </div>
     </details>
   </div>
@@ -332,6 +352,19 @@ details[open] summary{color:var(--ink);margin-bottom:6px}
   </div>
 
   <div class="card">
+    <h2>Version</h2>
+    <div class="row sp" style="margin-bottom:10px">
+      <div><div class="lbl">Installeret</div><div class="big g" id="verNow">—</div></div>
+      <div style="text-align:right"><div class="lbl">Sidst tjekket</div>
+        <div class="mini" id="verChecked" style="margin-top:6px">aldrig</div></div>
+    </div>
+    <button id="updBtn" style="width:100%" onclick="checkUpdate(true)">Søg efter opdatering</button>
+    <div class="note" style="margin-top:8px">
+      Appen tjekker selv efter nye versioner når du åbner den. Dine data røres ikke ved en opdatering.
+    </div>
+  </div>
+
+  <div class="card">
     <h2>Sådan lægger du den på hjemmeskærmen</h2>
     <div class="note">
       Åbn filen i <b>Chrome</b> på telefonen → menuen med de tre prikker → <b>Tilføj til startskærm</b>.
@@ -405,9 +438,16 @@ const PROGRAM = {
 
 /* ================== FØDEVARER ================== */
 const FOODS = [
+ {n:"Milbona High Protein", p:"hel flaske 800 ml", k:536, pr:84},
+ {n:"Milbona High Protein", p:"200 ml", k:134, pr:21.2},
  {n:"Whey 100, 1 scoop", p:"32 g", k:125, pr:22.4},
  {n:"Arla proteindrik", p:"500 g", k:255, pr:28.5},
  {n:"Proteinshake", p:"1 stk", k:187, pr:26},
+ {n:"Hakkebøf", p:"~95 g stegt", k:220, pr:18},
+ {n:"KiMs Snack Chips SCO", p:"hel pose 145 g", k:625, pr:9.4},
+ {n:"KiMs Snack Chips SCO", p:"100 g", k:431, pr:6.5},
+ {n:"Dip", p:"~40 g", k:150, pr:1},
+ {n:"Royal Stout", p:"33 cl dåse", k:185, pr:2},
  {n:"Æg", p:"1 stk", k:70, pr:6.3},
  {n:"Skyr", p:"150 g", k:90, pr:17},
  {n:"Hytteost", p:"100 g", k:80, pr:13},
@@ -415,6 +455,8 @@ const FOODS = [
  {n:"Laks", p:"100 g", k:200, pr:20},
  {n:"Hakket okse 5%", p:"100 g", k:137, pr:21},
  {n:"Cheddar", p:"30 g", k:120, pr:7.5},
+ {n:"Stenalderbrød", p:"1 skive ~35 g", k:175, pr:8},
+ {n:"Stenalderbrød", p:"2 skiver", k:350, pr:16},
  {n:"Rugbrød", p:"1 skive", k:80, pr:2.5},
  {n:"Kartofler", p:"100 g", k:80, pr:2},
  {n:"Ris, kogt", p:"100 g", k:130, pr:2.7},
@@ -425,10 +467,19 @@ const FOODS = [
  {n:"Smør", p:"15 g", k:110, pr:0},
  {n:"Avocado", p:"½ stk", k:160, pr:2},
  {n:"Broccoli", p:"100 g", k:34, pr:2.8},
- {n:"Tortilla m. oksekød", p:"1 stk", k:620, pr:31},
  {n:"Banan", p:"1 stk", k:105, pr:1.3},
  {n:"Bær", p:"100 g", k:45, pr:0.7},
  {n:"Softice m. drys", p:"lille", k:180, pr:3}
+];
+
+/* ================== RETTER (hele portioner) ================== */
+const DISHES = [
+ {n:"Parmesan sliders", p:"2 sliders — Madbanditten", k:590, pr:36},
+ {n:"Parmesan sliders", p:"1 slider", k:295, pr:18},
+ {n:"Kødboller i svampesauce", p:"1 portion (¼) — Madbanditten", k:510, pr:30},
+ {n:"Tortilla m. oksekød", p:"1 stk", k:620, pr:31},
+ {n:"Tortilla m. dobbelt oksekød", p:"1 stk", k:820, pr:51},
+ {n:"Monster Angus menu", p:"burger + fritter", k:1500, pr:60}
 ];
 
 /* ================== STATE ================== */
@@ -666,15 +717,22 @@ function renderHist(){
 }
 
 /* ================== KOST ================== */
-function renderQuick(){
-  const w=document.getElementById("quickWrap");
-  const all=FOODS.concat(DB.custom);
-  w.innerHTML=all.map((f,i)=>
-    '<div class="fbtn" onclick="addFood('+i+')">'+esc(f.n)+
-    '<small>'+esc(f.p||"")+' · '+f.k+' kcal · '+nf(f.pr,0)+'g P</small></div>'
-  ).join("");
+function allFoods(){
+  // rækkefølgen her SKAL matche indekset brugt af addFood()
+  return DISHES.concat(FOODS, DB.custom);
 }
-function allFoods(){ return FOODS.concat(DB.custom); }
+function renderQuick(){
+  const all=allFoods();
+  const btn=(f,i)=>'<div class="fbtn" onclick="addFood('+i+')">'+esc(f.n)+
+    '<small>'+esc(f.p||"")+' · '+f.k+' kcal · '+nf(f.pr,0)+'g P</small></div>';
+  const dishes=[], wares=[];
+  all.forEach((f,i)=>{
+    const isDish = i<DISHES.length || f.cat==="ret";
+    (isDish?dishes:wares).push(btn(f,i));
+  });
+  document.getElementById("dishWrap").innerHTML=dishes.join("");
+  document.getElementById("quickWrap").innerHTML=wares.join("");
+}
 
 function addFood(i){
   const f=allFoods()[i]; if(!f) return;
@@ -697,12 +755,13 @@ function addManual(){
 function addCustomFood(){
   const n=document.getElementById("nfName").value.trim();
   const p=document.getElementById("nfPortion").value.trim();
+  const cat=document.getElementById("nfCat").value;
   const k=parseFloat(document.getElementById("nfKcal").value);
   const pr=parseFloat(document.getElementById("nfProt").value);
   if(!n||isNaN(k)){ toast("Navn og kcal skal udfyldes"); return; }
-  DB.custom.push({n:n,p:p,k:k,pr:isNaN(pr)?0:pr});
+  DB.custom.push({n:n,p:p,k:k,pr:isNaN(pr)?0:pr,cat:cat});
   ["nfName","nfPortion","nfKcal","nfProt"].forEach(id=>document.getElementById(id).value="");
-  save(); renderQuick(); toast("Vare gemt");
+  save(); renderQuick(); toast(cat==="ret"?"Ret gemt":"Vare gemt");
 }
 function delEntry(i){
   const d=document.getElementById("foodDate").value;
@@ -918,6 +977,44 @@ function wipe(){
   localStorage.removeItem(KEY); DB=blankDB(); save(); initAll(); toast("Nulstillet");
 }
 
+/* ================== OPDATERING ================== */
+function appVersion(){
+  const m=document.querySelector('meta[name="app-version"]');
+  return m ? m.getAttribute("content") : "0";
+}
+function selfUrl(){
+  return location.pathname.replace(/[^/]*$/,"") + "index.html?cb=" + Date.now();
+}
+async function checkUpdate(manual){
+  const btn=document.getElementById("updBtn");
+  if(manual && btn){ btn.textContent="Søger…"; btn.disabled=true; }
+  let msg=null;
+  try{
+    const r=await fetch(selfUrl(), {cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const txt=await r.text();
+    const m=txt.match(/name="app-version"\s+content="([^"]+)"/);
+    if(!m) throw new Error("ingen versionsmarkør");
+    const remote=m[1], mine=appVersion();
+    document.getElementById("verChecked").textContent=new Date().toLocaleString("da-DK");
+    if(remote!==mine){
+      document.getElementById("updVer").textContent=remote;
+      document.getElementById("updBar").classList.remove("hide");
+      msg="Ny version "+remote+" fundet";
+    } else {
+      msg="Du kører nyeste version ("+mine+")";
+    }
+  }catch(e){
+    msg="Kunne ikke tjekke — er du online?";
+  }finally{
+    if(manual && btn){ btn.textContent="Søg efter opdatering"; btn.disabled=false; }
+    if(manual && msg) toast(msg);
+  }
+}
+function doUpdate(){
+  location.replace(location.pathname + "?v=" + Date.now());
+}
+
 /* ================== INIT ================== */
 function initAll(){
   const t=todayISO();
@@ -934,6 +1031,9 @@ function initAll(){
   document.getElementById("wDate").value=t;
 
   renderQuick(); fillSettings(); loadPrescribed(false); renderFood(); renderWeight();
+
+  document.getElementById("verNow").textContent=appVersion();
+  if(location.protocol.indexOf("http")===0) setTimeout(()=>checkUpdate(false), 1500);
 }
 
 document.getElementById("selWeek").addEventListener("change",()=>loadPrescribed(false));
