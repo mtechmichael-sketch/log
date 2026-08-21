@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#12161c">
-<meta name="app-version" content="1.7.0">
+<meta name="app-version" content="1.9.1">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -331,6 +331,16 @@ details[open] summary{color:var(--ink);margin-bottom:6px}
       <div><label>protein (g)</label><input id="setProt" type="number" inputmode="numeric"></div>
       <div><label>Bænk 1RM (kg)</label><input id="setBench" type="number" step="0.5" inputmode="decimal"></div>
       <div><label>Dødløft 1RM (kg)</label><input id="setDl" type="number" step="0.5" inputmode="decimal"></div>
+      <div style="grid-column:1/-1">
+        <label>Anstrengelse noteres som</label>
+        <select id="setEffort">
+          <option value="rir">RIR — reps du havde tilbage</option>
+          <option value="rpe">RPE — hvor hårdt det var (1–10)</option>
+        </select>
+      </div>
+    </div>
+    <div class="note" style="margin-top:8px">
+      Det er samme information: <b>RPE = 10 − RIR</b>. Skifter du, regnes dine gamle pas automatisk om — der går ingen data tabt.
     </div>
     <button class="btn-acc" style="width:100%;margin-top:10px" onclick="saveSettings()">Gem mål</button>
     <div class="note" style="margin-top:8px">
@@ -417,10 +427,10 @@ const PROGRAM = {
     B:[ex("Bænkpres touch-and-go",5,5,82.5,"70%")],
     C:[ex("Spoto / board press",4,4,87.5,"75%"),ex("Dødløft",4,3,105,"80%")]},
  6:{blok:"Styrke", A:[ex("Bænkpres m. pause",5,3,97.5,"82,5%")],
-    B:[ex("Bænkpres touch-and-go",5,5,82.5)],
+    B:[ex("Bænkpres touch-and-go",5,5,87.5,"75% — hævet efter RIR-test 21/8")],
     C:[ex("Spoto / board press",4,4,87.5),ex("Dødløft",4,3,110,"85%")]},
  7:{blok:"Styrke", A:[ex("Bænkpres m. pause",4,2,100,"85%")],
-    B:[ex("Bænkpres touch-and-go",5,5,85,"72,5%")],
+    B:[ex("Bænkpres touch-and-go",5,5,90,"77,5% — hævet efter RIR-test 21/8")],
     C:[ex("Spoto / board press",4,4,90,"77,5%"),ex("Dødløft",4,2,115,"87,5%")]},
  8:{blok:"Deload", A:[ex("Bænkpres m. pause",3,3,82.5,"70%")],
     B:[ex("Bænkpres touch-and-go",3,5,72.5)],
@@ -438,6 +448,25 @@ const PROGRAM = {
     B:[ex("Let teknik",3,3,60)],
     C:[ex("TEST — dødløft 1RM",1,1,null,"Sigt 140 kg+. Læg den et par dage efter bænktesten.")]}
 };
+
+/* ===== Arm-tilbehør (hypertrofi) — lægges efter hovedløftene ===== */
+function armeFuld(dag){
+  return dag==="B"
+    ? [ex("Overhead triceps-strækning",3,10,null,"10–12 reps · hold igen — albue i fuld stræk"),
+       ex("Skrå håndvægtscurl",3,8,null,"8–10 reps · 1–2 RIR")]
+    : [ex("Triceps pushdown",3,8,null,"8–10 reps · 1–2 RIR"),
+       ex("Hammercurl",3,8,null,"8–10 reps · 1–2 RIR · brachialis")];
+}
+function armeHalv(dag){
+  return dag==="B"
+    ? [ex("Overhead triceps-strækning",2,10,null,"nedtrapning mod test")]
+    : [ex("Hammercurl",2,10,null,"nedtrapning mod test")];
+}
+[5,6,7].forEach(u=>{ PROGRAM[u].B=PROGRAM[u].B.concat(armeFuld("B"));
+                     PROGRAM[u].C=PROGRAM[u].C.concat(armeFuld("C")); });
+[8,9,10].forEach(u=>{ PROGRAM[u].B=PROGRAM[u].B.concat(armeHalv("B"));
+                      PROGRAM[u].C=PROGRAM[u].C.concat(armeHalv("C")); });
+/* uge 11-12: intet armarbejde — alt peger mod testen */
 
 /* ================== FØDEVARER ================== */
 const FOODS = [
@@ -497,7 +526,7 @@ function blankDB(){
     food:{},       // "2026-08-14" -> [{n,k,pr}]
     weight:{},     // "2026-08-14" -> {kg,ket}
     custom:[],
-    settings:{kcal:1830, prot:130, bench:117.5, dl:130}
+    settings:{kcal:1900, prot:130, bench:117.5, dl:130, effort:"rir"}
   };
 }
 function load(){
@@ -553,6 +582,19 @@ function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",
 function toast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("on");
   clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove("on"),1900); }
 function epley(w,r){ return (!w||!r) ? 0 : w*(1+r/30); }
+
+/* Anstrengelse gemmes ALTID som RPE. RIR vises/indtastes som 10 − RPE. */
+function effortMode(){ return (DB.settings && DB.settings.effort==="rir") ? "rir" : "rpe"; }
+function effortLabel(){ return effortMode()==="rir" ? "RIR" : "RPE"; }
+function toDisplayEffort(rpe){
+  if(rpe===null||rpe===undefined||isNaN(rpe)) return null;
+  return effortMode()==="rir" ? Math.round((10-rpe)*10)/10 : rpe;
+}
+function fromDisplayEffort(v){
+  if(v===null||v===undefined||isNaN(v)) return null;
+  const r = effortMode()==="rir" ? 10-v : v;
+  return Math.max(0, Math.min(10, Math.round(r*10)/10));
+}
 
 /* ================== NAVIGATION ================== */
 function go(v){
@@ -615,7 +657,7 @@ function exCard(e,ei,sets){
     '<div class="ex" data-ex="'+ei+'" data-name="'+esc(e.n)+'">'+
       '<div class="exh"><div><div class="exn">'+esc(e.n)+'</div>'+
       '<div class="exp">'+esc(presc)+'</div></div></div>'+
-      '<div class="setheads"><span></span><span>kg</span><span>reps</span><span>RPE</span><span></span></div>'+
+      '<div class="setheads"><span></span><span>kg</span><span>reps</span><span>'+effortLabel()+'</span><span></span></div>'+
       '<div class="sets"></div>'+
       '<button class="btn-sm btn-ghost" style="width:100%;margin-top:4px" onclick="addSet(this)">+ sæt</button>'+
     '</div>';
@@ -631,7 +673,8 @@ function setRow(s){
   r.innerHTML='<div class="sn"></div>'+
     '<input type="number" step="0.5" inputmode="decimal" class="i-w" value="'+(s.w!==null&&s.w!==undefined?s.w:"")+'">'+
     '<input type="number" inputmode="numeric" class="i-r" value="'+(s.r!==null&&s.r!==undefined?s.r:"")+'">'+
-    '<input type="number" step="0.5" inputmode="decimal" class="i-rpe" placeholder="—" value="'+(s.rpe!==null&&s.rpe!==undefined?s.rpe:"")+'">'+
+    '<input type="number" step="0.5" inputmode="decimal" class="i-rpe" placeholder="—" value="'+
+      (toDisplayEffort(s.rpe)!==null?toDisplayEffort(s.rpe):"")+'">'+
     '<button class="del" onclick="delSet(this)">×</button>';
   return r;
 }
@@ -657,8 +700,9 @@ function saveSession(){
     exEl.querySelectorAll(".setrow").forEach(r=>{
       const w=parseFloat(r.querySelector(".i-w").value);
       const rp=parseInt(r.querySelector(".i-r").value,10);
-      const rpe=parseFloat(r.querySelector(".i-rpe").value);
-      if(!isNaN(w)&&!isNaN(rp)) sets.push({w:w,r:rp,rpe:isNaN(rpe)?null:rpe});
+      const shown=parseFloat(r.querySelector(".i-rpe").value);
+      const rpe=isNaN(shown)?null:fromDisplayEffort(shown);
+      if(!isNaN(w)&&!isNaN(rp)) sets.push({w:w,r:rp,rpe:rpe});
     });
     if(sets.length) exercises.push({n:exEl.dataset.name, sets:sets});
   });
@@ -709,7 +753,10 @@ function renderHist(){
   w.innerHTML = keys.map(k=>{
     const s=DB.sessions[k];
     const body=s.exercises.map(e=>{
-      const sets=e.sets.map(x=>nf(x.w,x.w%1?1:0)+"×"+x.r+(x.rpe?"@"+nf(x.rpe,1):"")).join("  ·  ");
+      const sets=e.sets.map(x=>{
+        const eff=toDisplayEffort(x.rpe);
+        return nf(x.w,x.w%1?1:0)+"×"+x.r+(eff!==null?" ("+nf(eff,eff%1?1:0)+" "+effortLabel()+")":"");
+      }).join("  ·  ");
       return '<div style="margin:3px 0"><b style="font-size:12.5px">'+esc(e.n)+'</b>'+
              '<div class="mini">'+esc(sets)+'</div></div>';
     }).join("");
@@ -919,17 +966,19 @@ function drawChart(s,avg){
 
 /* ================== DATA ================== */
 function saveSettings(){
-  DB.settings.kcal =+document.getElementById("setKcal").value||1830;
+  DB.settings.kcal =+document.getElementById("setKcal").value||1900;
   DB.settings.prot =+document.getElementById("setProt").value||130;
   DB.settings.bench=+document.getElementById("setBench").value||117.5;
   DB.settings.dl   =+document.getElementById("setDl").value||130;
-  save(); renderFood(); renderE1RM(); toast("Mål gemt ✓");
+  DB.settings.effort=document.getElementById("setEffort").value||"rir";
+  save(); renderFood(); renderE1RM(); loadPrescribed(false); toast("Mål gemt ✓");
 }
 function fillSettings(){
   document.getElementById("setKcal").value=DB.settings.kcal;
   document.getElementById("setProt").value=DB.settings.prot;
   document.getElementById("setBench").value=DB.settings.bench;
   document.getElementById("setDl").value=DB.settings.dl;
+  document.getElementById("setEffort").value=effortMode();
 }
 function dl(name,content,type){
   const b=new Blob([content],{type:type||"text/plain;charset=utf-8"});
